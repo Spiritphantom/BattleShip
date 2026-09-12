@@ -68,6 +68,202 @@ describe("GameBoard", () => {
 
       expect(canBeAttack).toBe(false);
     });
+
+    test("should auto-reveal the cells surrounding a sunk ship as misses", () => {
+      const game = new GameBoard();
+      game.clearPlacements();
+      game.placeShipManually("PatrolBoat1", [[5, 5]]);
+
+      game.receiveAttack(5, 5);
+      expect(game.vehicles.PatrolBoat1.isSunk).toBe(true);
+
+      const neighbours: Coord[] = [
+        [4, 4],
+        [4, 5],
+        [4, 6],
+        [5, 4],
+        [5, 6],
+        [6, 4],
+        [6, 5],
+        [6, 6],
+      ];
+      neighbours.forEach(([x, y]) => {
+        expect(game.missedAttack.has(`${x},${y}`)).toBe(true);
+        expect(game.receivedAttacks.has(`${x},${y}`)).toBe(true);
+      });
+
+      // an out-of-bounds neighbour of an edge ship must not blow up
+      const edgeGame = new GameBoard();
+      edgeGame.clearPlacements();
+      expect(() => {
+        edgeGame.placeShipManually("PatrolBoat1", [[0, 0]]);
+        edgeGame.receiveAttack(0, 0);
+      }).not.toThrow();
+    });
+  });
+
+  describe("manual placement", () => {
+    let game: GameBoard;
+    beforeEach(() => {
+      game = new GameBoard();
+      game.vehicles = {
+        Battleship: new Ship(4),
+        Cruiser: new Ship(3),
+        Submarine: new Ship(3),
+        Destroyer1: new Ship(2),
+        Destroyer2: new Ship(2),
+        Destroyer3: new Ship(2),
+        PatrolBoat1: new Ship(1),
+        PatrolBoat2: new Ship(1),
+        PatrolBoat3: new Ship(1),
+        PatrolBoat4: new Ship(1),
+      };
+    });
+
+    test("places a ship when the coordinates are valid", () => {
+      const success = game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      expect(success).toBe(true);
+      expect(game.getShipCoord(game.vehicles.Destroyer1)).toEqual(
+        new Set(["0,0", "1,0"]),
+      );
+    });
+
+    test("rejects a placement with the wrong number of coordinates", () => {
+      const success = game.placeShipManually("Destroyer1", [[0, 0]]);
+      expect(success).toBe(false);
+    });
+
+    test("rejects a placement that overlaps another ship", () => {
+      game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      const success = game.placeShipManually("PatrolBoat1", [[1, 0]]);
+      expect(success).toBe(false);
+    });
+
+    test("rejects a placement adjacent to another ship", () => {
+      game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      const success = game.placeShipManually("PatrolBoat1", [[1, 1]]);
+      expect(success).toBe(false);
+    });
+
+    test("allows repositioning a ship without it blocking itself", () => {
+      game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      const success = game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [0, 1],
+      ]);
+      expect(success).toBe(true);
+      expect(game.getShipCoord(game.vehicles.Destroyer1)).toEqual(
+        new Set(["0,0", "0,1"]),
+      );
+    });
+
+    test("rejects an out-of-bounds placement", () => {
+      const success = game.placeShipManually("Destroyer1", [
+        [9, 9],
+        [10, 9],
+      ]);
+      expect(success).toBe(false);
+    });
+
+    test("removeShipPlacement clears only the targeted ship", () => {
+      game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      game.placeShipManually("PatrolBoat1", [[5, 5]]);
+      game.removeShipPlacement("Destroyer1");
+      expect(game.getShipCoord(game.vehicles.Destroyer1)).toBeUndefined();
+      expect(game.getShipCoord(game.vehicles.PatrolBoat1)).toEqual(
+        new Set(["5,5"]),
+      );
+    });
+
+    test("unplacedShipKeys and isFullyPlaced reflect placement progress", () => {
+      expect(game.isFullyPlaced()).toBe(false);
+      expect(game.unplacedShipKeys().length).toBe(10);
+
+      // each ship's coordinates are spaced across separate rows so nothing collides
+      const positions: [keyof typeof game.vehicles, [number, number][]][] = [
+        [
+          "Battleship",
+          [
+            [0, 0],
+            [1, 0],
+            [2, 0],
+            [3, 0],
+          ],
+        ],
+        [
+          "Cruiser",
+          [
+            [0, 2],
+            [1, 2],
+            [2, 2],
+          ],
+        ],
+        [
+          "Submarine",
+          [
+            [0, 4],
+            [1, 4],
+            [2, 4],
+          ],
+        ],
+        [
+          "Destroyer1",
+          [
+            [0, 6],
+            [1, 6],
+          ],
+        ],
+        [
+          "Destroyer2",
+          [
+            [0, 8],
+            [1, 8],
+          ],
+        ],
+        [
+          "Destroyer3",
+          [
+            [3, 8],
+            [4, 8],
+          ],
+        ],
+        ["PatrolBoat1", [[6, 0]]],
+        ["PatrolBoat2", [[6, 2]]],
+        ["PatrolBoat3", [[6, 4]]],
+        ["PatrolBoat4", [[6, 6]]],
+      ];
+      positions.forEach(([key, coords]) => {
+        expect(game.placeShipManually(key, coords)).toBe(true);
+      });
+
+      expect(game.isFullyPlaced()).toBe(true);
+      expect(game.unplacedShipKeys().length).toBe(0);
+    });
+
+    test("clearPlacements removes every ship from the board", () => {
+      game.placeShipManually("Destroyer1", [
+        [0, 0],
+        [1, 0],
+      ]);
+      game.clearPlacements();
+      expect(game.occupied.length).toBe(0);
+      expect(game.isFullyPlaced()).toBe(false);
+    });
   });
 
   describe("one point shift", () => {

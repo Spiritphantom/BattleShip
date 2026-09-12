@@ -12,5 +12,15 @@ export default defineConfig([
     languageOptions: { globals: globals.browser },
   },
   tseslint.configs.recommended,
+  {
+    rules: {
+      // the codebase's own convention for an intentionally-unused
+      // destructured/parameter binding is a leading underscore
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
   eslintConfigPrettier,
 ]);

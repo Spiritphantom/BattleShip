@@ -1,4 +1,8 @@
-import { getHomeData } from "../model/home";
+import { getBattleData } from "../model/battle";
+import { getModeSelectData } from "../model/modeSelect";
+import { getPassDeviceData } from "../model/passDevice";
+import { getSetupData } from "../model/setup";
+import { game } from "./gameDriver";
 import Page, { type PageData } from "./Page";
 
 //file containing functions that extends the use of the render engine
@@ -6,7 +10,10 @@ export const mainContainer = document.getElementById("app");
 
 //map that contains all app view state
 export const viewMap = {
-  home: getHomeData,
+  modeSelect: getModeSelectData,
+  setup: () => getSetupData(game.setupBoard),
+  passDevice: getPassDeviceData,
+  battle: () => getBattleData(game.setupBoard),
 } as const;
 let currentView: keyof typeof viewMap | null = null;
 
@@ -16,10 +23,16 @@ export function renderView(
   afterRender?: () => void,
 ) {
   if (!mainContainer) return;
-  if (currentView === view) return;
   currentView = view;
   const fromRenderView = true;
   renderElement(mainContainer, viewMap[view](), fromRenderView, afterRender);
+}
+
+// re-renders whichever view is currently active -- used after actions that
+// change game state without navigating anywhere (a placement, an attack)
+export function rerenderCurrentView() {
+  if (!currentView) return;
+  renderView(currentView);
 }
 
 // a utility function that render processed data in the supplied host

@@ -22,9 +22,9 @@ export class Computer extends Player {
   }
 
   override attack(): string | boolean {
-    let result = this.findBestMove();
+    const result = this.findBestMove();
     if (result) {
-      let [x, y] = result[0].split(",").map(Number);
+      const [x, y] = result[0].split(",").map(Number);
       if (x !== undefined && y !== undefined) {
         super.attack(x, y);
         return `${x},${y}`;
@@ -39,13 +39,13 @@ export class Computer extends Player {
     const neigbohrCells = new Set<string>();
     const sunkCells = new Set<string>();
     // create a map of every coordinate
-    let cells = Array.from({ length: 100 }).map(
+    const cells = Array.from({ length: 100 }).map(
       (_val, index): [string, number] => [this.coordStr(index), 0],
     );
     this.cellTracker = new Map(cells);
 
     //register all opponets ships length
-    for (let [_vehicle, ship] of Object.entries(this.opBoard.vehicles)) {
+    for (const [_vehicle, ship] of Object.entries(this.opBoard.vehicles)) {
       if (ship.isSunk) {
         sunkenShips.push(ship);
       } else {
@@ -53,10 +53,10 @@ export class Computer extends Player {
       }
     }
 
-    for (let ship of sunkenShips) {
-      let currShipCoord = this.opBoard.getShipCoord(ship);
+    for (const ship of sunkenShips) {
+      const currShipCoord = this.opBoard.getShipCoord(ship);
       if (currShipCoord) {
-        let currShipArr = Array.from(currShipCoord).map((val) =>
+        const currShipArr = Array.from(currShipCoord).map((val) =>
           val.split(",").map(Number),
         );
 
@@ -76,7 +76,7 @@ export class Computer extends Player {
       }
     }
     //fill horixontal
-    for (let size of unsunkShipLengths) {
+    for (const size of unsunkShipLengths) {
       this.probabilityLogic(true, size, sunkCells);
       this.probabilityLogic(false, size, sunkCells);
     }
@@ -108,13 +108,13 @@ export class Computer extends Player {
     for (let outer = 0; outer <= 9; outer++) {
       for (let inner = 0; inner <= 10 - size; inner++) {
         //generat coordinates
-        let cells = Array.from({ length: size }).map((_val, index) =>
+        const cells = Array.from({ length: size }).map((_val, index) =>
           isHorizontal
             ? `${inner + index},${outer}`
             : `${outer},${inner + index}`,
         );
 
-        let notValid = cells.some(
+        const notValid = cells.some(
           (cell) => this.opBoard.missedAttack.has(cell) || sunkCells.has(cell),
         );
         if (notValid) continue;
@@ -132,7 +132,7 @@ export class Computer extends Player {
         }
 
         cells.forEach((cell) => {
-          let cellVal = this.cellTracker.get(cell);
+          const cellVal = this.cellTracker.get(cell);
           if (cellVal !== undefined) {
             const weightBonus = hitCount > 0 ? 1 + hitCount * 20 : 1;
             this.cellTracker.set(cell, cellVal + weightBonus);

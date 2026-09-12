@@ -1,20 +1,13 @@
 import { mainContainer, renderElement } from "../../lib/renderUtilities";
 import { overlayData } from "../../model/components/overlay";
-import { interactionHandler } from "../handlers/handleBtn";
 
 export function gameOver(winner: string) {
   if (!mainContainer) return;
-  let retreatBtn = mainContainer.querySelector("#retreat") as HTMLElement;
-  retreatBtn.textContent = "New Match";
-  retreatBtn.setAttribute("id", "newMatch");
-  let computerBoard = mainContainer.querySelector(
-    "#computerBoard",
-  ) as HTMLElement;
+  const overlayMsg = mainContainer.querySelector(
+    "#overlay",
+  ) as HTMLElement | null;
+  if (!overlayMsg) return;
 
-  let overlayMsg = mainContainer.querySelector("#overlay") as HTMLElement;
-  if (overlayMsg) {
-    renderElement(overlayMsg, overlayData(winner));
-    overlayMsg.style.display = "block";
-  }
-  computerBoard.removeEventListener("click", interactionHandler);
+  renderElement(overlayMsg, overlayData(winner));
+  overlayMsg.style.display = "flex";
 }

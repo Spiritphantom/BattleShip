@@ -5,7 +5,7 @@ class EventBus {
   private events = new Map<event, action<unknown>[]>();
 
   public subscribe(ev: event, act: action<unknown>) {
-    let currEvent = this.events.get(ev);
+    const currEvent = this.events.get(ev);
     if (currEvent && this.events.has(ev)) {
       currEvent.push(act);
     } else {
@@ -18,7 +18,7 @@ class EventBus {
   }
 
   public publish(ev: event, data?: unknown) {
-    let currEvent = this.events.get(ev);
+    const currEvent = this.events.get(ev);
 
     if (currEvent)
       currEvent.forEach((act) => {
@@ -27,7 +27,7 @@ class EventBus {
   }
 
   private unsubscribe(ev: event, act: action<unknown>) {
-    let currEvent = this.events.get(ev);
+    const currEvent = this.events.get(ev);
 
     if (currEvent)
       this.events.set(

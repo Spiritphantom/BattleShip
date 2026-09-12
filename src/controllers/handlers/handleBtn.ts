@@ -1,49 +1,62 @@
-import { eventBus } from "../../lib/EventBus";
+import type { GameMode } from "../../lib/gameDriver";
 import { driver, game } from "../../lib/gameDriver";
-import { mainContainer } from "../../lib/renderUtilities";
+import { renderView } from "../../lib/renderUtilities";
+import { ui } from "../../lib/uiState";
 import { gameOver } from "../helpers/gameOver";
+import { goToBattle, goToNextSetupPhase } from "../helpers/phaseTransitions";
 
-export function handleRandomize(_match: Element | null, _e: PointerEvent) {
-  game.setupBoard.playerBoard.placeShip();
+export function handleModeSelect(match: Element | null, _e: PointerEvent) {
+  if (!match) return;
+  const mode: GameMode =
+    match.id === "mode-vs-human" ? "vs-human" : "vs-computer";
+  game.setupBoard = driver(mode);
+  ui.orientation = "horizontal";
+  renderView("setup");
 }
 
-export function handlePlay(match: Element | null, _e: PointerEvent) {
-  if (!mainContainer || !match) return;
-
-  match.textContent = "Retreat";
-  match.setAttribute("id", "retreat");
-
-  mainContainer.querySelector("#randomize")?.setAttribute("disabled", "");
-  let computerBoard = mainContainer.querySelector(
-    "#computerBoard",
-  ) as HTMLElement;
-  if (!computerBoard) return;
-
-  computerBoard.addEventListener("click", interactionHandler);
+export function handleRotate(_match: Element | null, _e: PointerEvent) {
+  ui.orientation = ui.orientation === "horizontal" ? "vertical" : "horizontal";
+  renderView("setup");
 }
 
-export function handleRetreat(match: Element | null, _e: PointerEvent) {
-  if (!mainContainer || !match) return;
-  gameOver("Computer");
+export function handleAutoPlace(_match: Element | null, _e: PointerEvent) {
+  const state = game.setupBoard;
+  const board =
+    state.setupPhase === "player1" ? state.player1Board : state.player2Board;
+  board.placeShip();
+  renderView("setup");
+}
+
+export function handleClearPlacement(_match: Element | null, _e: PointerEvent) {
+  const state = game.setupBoard;
+  const board =
+    state.setupPhase === "player1" ? state.player1Board : state.player2Board;
+  board.clearPlacements();
+  renderView("setup");
+}
+
+export function handleConfirmPlacement(
+  _match: Element | null,
+  _e: PointerEvent,
+) {
+  const state = game.setupBoard;
+  const board =
+    state.setupPhase === "player1" ? state.player1Board : state.player2Board;
+  if (!board.isFullyPlaced()) return;
+  goToNextSetupPhase();
+}
+
+export function handlePassContinue(_match: Element | null, _e: PointerEvent) {
+  goToBattle();
+}
+
+export function handleRetreat(_match: Element | null, _e: PointerEvent) {
+  const state = game.setupBoard;
+  const winnerName =
+    state.mode === "vs-computer" ? "Computer" : "The other player";
+  gameOver(winnerName);
 }
 
 export function handleNewMatch(_match: Element | null, _e: PointerEvent) {
-  game.setupBoard = driver();
-  eventBus.publish("new:game", game.setupBoard.playerBoard.occupied);
-}
-
-//helpers
-export function interactionHandler(e: PointerEvent) {
-  let target = e.target as HTMLElement;
-  let cell = target.closest(`[data-cord]`) as HTMLElement;
-  if (!cell) return;
-
-  if (game.setupBoard.currentPlayer === "computer") return;
-  let cordStr = cell.dataset["cord"];
-  if (!cordStr) return;
-
-  const [x, y] = cordStr.split(",").map(Number) as [number, number];
-
-  let canAttack = game.setupBoard.player.attack(x, y);
-  if (!canAttack) return;
+  renderView("modeSelect");
 }

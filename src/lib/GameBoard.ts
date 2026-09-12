@@ -10,8 +10,20 @@ export type PayLoad = {
   allSunk: null | boolean;
 };
 
+export type ShipKey =
+  | "Battleship"
+  | "Cruiser"
+  | "Submarine"
+  | "Destroyer1"
+  | "Destroyer2"
+  | "Destroyer3"
+  | "PatrolBoat1"
+  | "PatrolBoat2"
+  | "PatrolBoat3"
+  | "PatrolBoat4";
+
 export class GameBoard {
-  public vehicles = {
+  public vehicles: Record<ShipKey, Ship> = {
     Battleship: new Ship(4),
     Cruiser: new Ship(3),
     Submarine: new Ship(3),
@@ -51,13 +63,13 @@ export class GameBoard {
       let x = Math.floor(Math.random() * 10);
       let y = Math.floor(Math.random() * 10);
       let coordinate = this.coordGen(data.length, [x, y]);
-      let filledCord = new Set(this.coordMap.keys());
+      const filledCord = new Set(this.coordMap.keys());
       let valid: boolean = false;
       let attempts = 0;
 
       while (!valid && attempts < 100) {
         attempts++;
-        let isInOccupied = coordinate.some((val) =>
+        const isInOccupied = coordinate.some((val) =>
           filledCord.has(this.coordKey(val)),
         );
         //closeness check
@@ -106,7 +118,7 @@ export class GameBoard {
     const [sx, sy] = start;
     const isHorizontal = Math.random() > 0.5;
 
-    let coordinates: [number, number][] = [];
+    const coordinates: [number, number][] = [];
 
     if (isHorizontal) {
       const startX = Math.max(0, Math.min(sx, 10 - len));
@@ -122,16 +134,84 @@ export class GameBoard {
     return coordinates;
   }
 
+  // checks whether the given coordinates are a legal placement: in bounds,
+  // not overlapping another ship, and not touching (even diagonally)
+  // another ship's cells. Pass ignoreShip when repositioning a ship that
+  // already occupies part of the board, so it doesn't block itself
+  isValidPlacement(coordinate: Coord[], ignoreShip?: Ship): boolean {
+    for (const [x, y] of coordinate) {
+      if (x < 0 || x > 9 || y < 0 || y > 9) return false;
+    }
+
+    for (const [x, y] of coordinate) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const neighbour = this.coordMap.get(this.coordKey([x + dx, y + dy]));
+          if (neighbour && neighbour !== ignoreShip) return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  // manually place a single ship (used by drag-and-drop setup). Returns
+  // false without mutating anything if the coordinates are invalid or
+  // don't match the ship's length
+  placeShipManually(shipKey: ShipKey, coordinate: Coord[]): boolean {
+    const ship = this.vehicles[shipKey];
+    if (coordinate.length !== ship.length) return false;
+    if (!this.isValidPlacement(coordinate, ship)) return false;
+
+    this.removeShipPlacement(shipKey);
+    coordinate.forEach((value) => {
+      this.coordMap.set(this.coordKey(value), ship);
+    });
+
+    if (this.eventBus) {
+      this.eventBus.publish(`Refresh ${this.boardId} board`, this.occupied);
+    }
+    return true;
+  }
+
+  // clears a single ship's coordinates, if it has any, without touching
+  // any other ship or attack history
+  removeShipPlacement(shipKey: ShipKey) {
+    const ship = this.vehicles[shipKey];
+    const existing = this.getShipCoord(ship);
+    existing?.forEach((key) => this.coordMap.delete(key));
+  }
+
+  // ship keys that have not yet been placed on the board
+  unplacedShipKeys(): ShipKey[] {
+    return (Object.keys(this.vehicles) as ShipKey[]).filter(
+      (key) => !this.getShipCoord(this.vehicles[key]),
+    );
+  }
+
+  isFullyPlaced(): boolean {
+    return this.unplacedShipKeys().length === 0;
+  }
+
+  // clears every ship's placement, leaving attack history untouched --
+  // used while a player is still arranging their fleet during setup
+  clearPlacements() {
+    this.coordMap = new Map();
+    if (this.eventBus) {
+      this.eventBus.publish(`Refresh ${this.boardId} board`, this.occupied);
+    }
+  }
+
   modifyCoord([x, y]: Coord, coordArr: Coord[]) {
     //get currentShip
-    let currentShip = this.coordMap.get(this.coordKey([x, y]));
+    const currentShip = this.coordMap.get(this.coordKey([x, y]));
     if (!currentShip) return false;
     ///
-    let oldCoords = this.getShipCoord(currentShip);
+    const oldCoords = this.getShipCoord(currentShip);
     if (!oldCoords) return false;
 
-    let coordValidity = coordArr.some((val) => {
-      let key = this.coordKey(val);
+    const coordValidity = coordArr.some((val) => {
+      const key = this.coordKey(val);
       return this.coordMap.has(key) && !oldCoords.has(key);
     });
     if (coordValidity) return false;
@@ -156,11 +236,11 @@ export class GameBoard {
       allSunk: null,
     };
     if (x < 0 || x > 9 || y < 0 || y > 9) return false;
-    let coordStr = this.coordKey([x, y]);
+    const coordStr = this.coordKey([x, y]);
     if (this.receivedAttacks.has(coordStr)) return false;
 
     this.receivedAttacks.add(coordStr);
-    let currentShip = this.coordMap.get(coordStr);
+    const currentShip = this.coordMap.get(coordStr);
     if (typeof currentShip === "undefined") {
       this.missedAttack.add(coordStr);
       payLoad.missed = true;
@@ -169,6 +249,7 @@ export class GameBoard {
       this.successfulAttack.add(coordStr);
       payLoad.allSunk = this.allSunk();
       payLoad.hit = true;
+      if (currentShip.isSunk) this.blockSurrounding(currentShip);
     }
 
     if (this.eventBus) {
@@ -179,6 +260,34 @@ export class GameBoard {
 
   allSunk() {
     return Object.values(this.vehicles).every((ship) => ship.isSunk);
+  }
+
+  // once a ship is fully sunk, every cell touching it (including
+  // diagonally) is guaranteed empty -- no other ship can legally sit
+  // there, per the same adjacency rule isValidPlacement enforces -- so
+  // those cells are auto-revealed as misses and taken out of play rather
+  // than left as free guesses.
+  private blockSurrounding(ship: Ship) {
+    const coords = this.getShipCoord(ship);
+    if (!coords) return;
+
+    coords.forEach((key) => {
+      const [sx, sy] = key.split(",").map(Number) as Coord;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = sx + dx;
+          const ny = sy + dy;
+          if (nx < 0 || nx > 9 || ny < 0 || ny > 9) continue;
+
+          const neighbourKey = this.coordKey([nx, ny]);
+          if (this.receivedAttacks.has(neighbourKey)) continue;
+
+          this.receivedAttacks.add(neighbourKey);
+          this.missedAttack.add(neighbourKey);
+        }
+      }
+    });
   }
 
   private coordKey([x, y]: Coord) {
@@ -196,7 +305,7 @@ export class GameBoard {
       const [x, y] = key.split(",").map(Number);
 
       if (!groups.has(ship)) groups.set(ship, []);
-      let shipRef = groups.get(ship);
+      const shipRef = groups.get(ship);
       if (shipRef && x !== undefined && y !== undefined) shipRef.push([x, y]);
     }
 
@@ -206,12 +315,12 @@ export class GameBoard {
   getShipCoord(ship: Ship): Set<string> | undefined {
     const shipLocation = this.shipLocal().get(ship);
     if (!shipLocation) return undefined;
-    let coords = new Set(shipLocation.map((val) => this.coordKey(val)));
+    const coords = new Set(shipLocation.map((val) => this.coordKey(val)));
     return coords;
   }
 
   hasShipSunk(x: number, y: number) {
-    let ship = this.coordMap.get(this.coordKey([x, y]));
+    const ship = this.coordMap.get(this.coordKey([x, y]));
     if (!ship) return false;
     return ship.isSunk;
   }
