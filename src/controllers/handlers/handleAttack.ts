@@ -1,4 +1,5 @@
 import { attacker, game, opponentInd, targetBoard } from "../../lib/gameDriver";
+import { recordResult } from "../../lib/gameStats";
 import { renderView } from "../../lib/renderUtilities";
 import { ui } from "../../lib/uiState";
 import { Computer } from "../../lib/Player";
@@ -38,6 +39,9 @@ function resolveAfterAttack(x: number, y: number) {
         : winnerIsPlayer1
           ? "Player 1"
           : "Player 2";
+    if (state.mode === "vs-computer") {
+      recordResult(winnerIsPlayer1);
+    }
     gameOver(winnerName);
     return;
   }

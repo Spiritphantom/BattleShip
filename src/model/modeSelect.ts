@@ -1,12 +1,24 @@
+import { getStats } from "../lib/gameStats";
 import type { PageData } from "../lib/Page";
 
 export function getModeSelectData(): PageData {
+  const stats = getStats();
+
   return {
     tag: "main",
     id: "main",
     content: [
       { tag: "h1", content: "⚓ Battleship" },
       { tag: "p", class: "subtitle", content: "Choose how you want to play" },
+      ...(stats.gamesPlayed > 0
+        ? [
+            {
+              tag: "p",
+              id: "statsLine",
+              content: `Vs Computer record: ${stats.wins}W - ${stats.losses}L (${stats.gamesPlayed} played)`,
+            } as PageData,
+          ]
+        : []),
       {
         tag: "div",
         class: "modeGrid",
